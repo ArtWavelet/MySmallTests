@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en" >
+<head>
+	<meta charset="utf-8" />
+	<meta name="author" content="Script Tutorials" />
+	<title>HTML5 Game Tetris</title>
+
+	<style>
+	canvas {
+		border: 2px inset black;
+	}
+	
+	#nextPieceScene {
+		background-color: white;
+		position: relative;
+		width: 150px;
+		height: 100px;
+		top: -300px;
+		left: 0px;
+	}
+	
+	#info {
+		border: 2px inset black;
+		position: relative;
+		top: -300px;
+		left: 208px;
+		width: 150px;
+	}
+	
+	#moreinfo {
+		border: 2px inset black;
+		position: relative;
+		top: -295px;
+		left: 208px;
+		width: 150px;
+	}
+	
+	.container {
+		background-color: #f2f2f2;
+	}
+	</style>
+	<script type="text/javascript" src="jquery-1.9.0.js"></script>
+	<script>
+		var canvas = null;
+		var context = null;
+		var npCanvas = null;
+		var npContext = null;
+		var Map;
+		var W = 10;
+		var H = 20;
+		var SquareSize = 20;
+		var Shapes = [[[0,0],[1,0],[2,0],[3,0]], // 4x1 line
+					 [[0,0],[1,0],[2,0],[2,1]],  // 2x3-L
+					 [[0,0],[1,0],[1,1],[2,1]],  // 2x1+2x1 Z
+					 [[1,0],[2,0],[0,1],[1,1]],  // 2x1+2x1 S
+					 [[0,0],[1,0],[0,1],[1,1]],  // 2x2-square
+					 [[0,0],[1,0],[2,0],[1,1]]]; // 3x2 T
+		var MovingShape = [[0,0],[1,0],[2,0],[3,0]];
+		var MovingPos = [4,0];
+		var MovingColor = 1;
+		var NextShape = [[0,0],[1,0],[2,0],[3,0]];
+		var NextColor = 1;
+		
+		var LinesToRemove = [];
+		var removingLines = false;
+		var removingLinesCounter = 15; // 15*30ms
+		var updateCounter = 20;
+		var updateCounterMax = 20;
+		
+		var Level = 1;
+		var LinesRemoved = 0;
+		var Score = 0;
+		
+		var isPaused = true;
+		var GameOver = false;
+		
+		function createArray(length) {
+			var arr = new Array(length || 0), i = length;
+
+			if (arguments.length > 1) {
+				var args = Array.prototype.slice.call(arguments, 1);
+				while(i--) arr[length-1 - i] = createArray.apply(this, args);
+			}
+
+			return arr;
+		};
+		
+		var getNextPiece = function() {
+			return Math.floor(Math.random() * 6);
+		};
+		
+		var getNextColor = function() {
+			return Math.floor(Math.random() * 4)+1;
+		};
+		
+		var clearCanvas = function() {
+			context.clearRect(0, 0, canvas.width, canvas.height);
+		};
+		
+		// Color, Gradient or Pattern
+		var setCanvasBackground = function(CGP) {
+			context.fillStyle = CGP;
+			context.fillRect(0, 0, canvas.width, canvas.height);
+		};
+		
+		var resetMatrix = function() {
+			context.setTransform(1,0,0,1,0,0);
+		};
+		
+		var translate = function(dx, dy) {
+			context.translate(dx, dy);
+		};
+		
+		var rotate = function(dRads) {
+			context.rotate(dRads);
+		};
+		
+		// Process Pressed Keys function
+		var processPressedKeys = function(key) {
+			if( isPaused && key != 32 ) { return; } // Key event handling disabled while the game is paused.
+			if( GameOver && key != 13 ) { return; } // Key event handling disabled while the game is paused.
+			
+			switch(key) {
+			case 13: initNewGame(); break; // 'Enter' key
+			case 32: isPaused = false; break; // 'Spacebar' key
+			case 37: moveShapeLeft(); break; // 'Left' key
+			case 38: rotateShape(); break; // 'Up' key
+			case 39: moveShapeRight(); break; // 'Right' key
+			case 40: dropShape(); break; // 'Down' key // moveShapeDown
+			}
+			drawScene();
+		};
+		
+		var initNewGame = function() {
+			MovingPos = [4,0];
+			LinesToRemove = [];
+			removingLines = false;
+			removingLinesCounter = 15; // 15*30ms
+			updateCounter = 20;
+			updateCounterMax = 20;
+			
+			Level = 1;
+			LinesRemoved = 0;
+			Score = 0;
+			
+			isPaused = true;
+			GameOver = false;
+			
+			Map = createArray(10, 20);
+			for( var x = 0; x < W; x++ )
+			{
+				for( var y = 0; y < H; y++ )
+				{
+					Map[x][y] = 0;
+				}
+			}
+			var np = getNextPiece();
+			for( var i = 0; i < 4; i++ ) {
+				MovingShape[i][0] = Shapes[np][i][0];
+				MovingShape[i][1] = Shapes[np][i][1];
+			}
+			MovingColor = getNextColor();
+			np = getNextPiece();
+			for( var i = 0; i < 4; i++ ) {
+				NextShape[i][0] = Shapes[np][i][0];
+				NextShape[i][1] = Shapes[np][i][1];
+			}
+			NextColor = getNextColor();
+			drawNextPiece();
+			updateInfoView();
+		};
+		
+		var init = function() {
+			canvas = document.getElementById('scene');
+			context = canvas.getContext('2d');
+			npCanvas = document.getElementById('nextPieceScene');
+			npContext = npCanvas.getContext('2d');
+			
+			initNewGame();
+			
+			$(window).keydown(function(event){ // keyboard-down alerts
+				processPressedKeys(event.keyCode);
+			});
+			setInterval(handleCycle, 30); // loop mainloop
+		};
+		
+		var moveShapeDown = function() {
+			var tmp = [[0,0],[0,0],[0,0],[0,0]];
+			for( var i = 0; i < 4; i++ ) {
+				tmp[i][0] = MovingShape[i][0] + MovingPos[0];
+				tmp[i][1] = MovingShape[i][1] + MovingPos[1]+1;
+			}
+			for( var i = 0; i < 4; i++ )
+			{
+				if( Map[tmp[i][0]][tmp[i][1]] != 0 ) { return false; }
+				if( H <= tmp[i][1] ) { return false; }
+			}
+			MovingPos[1] += 1;
+			return true;
+		};
+		
+		var dropShape = function() {
+			// Loop until movement stops
+			while( true ) {
+				if( !moveShapeDown() ) { break; }
+			}
+			// Check line removal
+		};
+		
+		var moveShapeLeft = function() {
+			var tmp = [[0,0],[0,0],[0,0],[0,0]];
+			for( var i = 0; i < 4; i++ ) {
+				tmp[i][0] = MovingShape[i][0] + MovingPos[0]-1;
+				tmp[i][1] = MovingShape[i][1] + MovingPos[1];
+			}
+			for( var i = 0; i < 4; i++ )
+			{
+				if( Map[tmp[i][0]][tmp[i][1]] != 0 ) { return false; }
+				if( tmp[i][0] < 0 ) { return false; }
+			}
+			MovingPos[0] -= 1;
+			return true;
+		};
+		
+		var moveShapeRight = function() {
+			var tmp = [[0,0],[0,0],[0,0],[0,0]];
+			for( var i = 0; i < 4; i++ ) {
+				tmp[i][0] = MovingShape[i][0] + MovingPos[0]+1;
+				tmp[i][1] = MovingShape[i][1] + MovingPos[1];
+			}
+			for( var i = 0; i < 4; i++ )
+			{
+				if( Map[tmp[i][0]][tmp[i][1]] != 0 ) { return false; }
+				if( W <= tmp[i][0] ) { return false; }
+			}
+			MovingPos[0] += 1;
+			return true;
+		};
+		
+		var rotateShape = function(dir) {
+			var tmpShape = [[0,0],[0,0],[0,0],[0,0]];
+			for( var i = 0; i < 4; i++ )
+			{
+				tmpShape[i][0] = Math.round(MovingShape[i][0]*Math.cos(Math.PI/2) - MovingShape[i][1]*Math.sin(Math.PI/2));
+				tmpShape[i][1] = Math.round(MovingShape[i][1]*Math.cos(Math.PI/2) + MovingShape[i][0]*Math.sin(Math.PI/2));
+			}
+			
+			var minX = 0, minY = 0;
+			for( var i = 0; i < 4; i++ ) { // Find the new zero
+				if(tmpShape[i][0] < minX) { minX = tmpShape[i][0]; }
+				if(tmpShape[i][1] < minY) { minY = tmpShape[i][1]; }
+			}
+			for( var i = 0; i < 4; i++ ) { // Zero the Zero :)
+				tmpShape[i][0] -= minX;
+				tmpShape[i][1] -= minY;
+			}
+			// Check over lapping and outside area squares, i.e. limits
+			var tmp = [[0,0],[0,0],[0,0],[0,0]];
+			for( var i = 0; i < 4; i++ ) {
+				tmp[i][0] = tmpShape[i][0] + MovingPos[0];
+				tmp[i][1] = tmpShape[i][1] + MovingPos[1];
+			}
+			if( !checkMoveRotCondition(tmp) ) {
+				return false;
+			}
+			for( var i = 0; i < 4; i++ ) {
+				MovingShape[i][0] = tmpShape[i][0];
+				MovingShape[i][1] = tmpShape[i][1];
+			}
+			return true;
+		};
+		
+		var checkMoveRotCondition = function(shape) {
+			for( var i = 0; i < 4; i++ )
+			{
+				if( Map[shape[i][0]][shape[i][1]] != 0 ) { return false; }
+				if( shape[i][0] < 0 ) { return false; }
+				if( W <= shape[i][0] ) { return false; }
+				if( shape[i][1] < 0 ) { return false; }
+				if( H <= shape[i][1] ) { return false; }
+			}
+			return true;
+		};
+		
+		var checkLineRemovalCondition = function() {
+			var removeLines = 0;
+			for( var y = 0; y < H; y++ )
+			{
+				var remThisLine = true;
+				for( var x = 0; x < W; x++ )
+				{
+					if( Map[x][y] == 0 ) {
+						remThisLine = false;
+						break;
+					}
+				}
+				if( remThisLine == true ) {
+					LinesToRemove.push(y);
+					removeLines = removeLines+1;
+				}
+			}
+			return removeLines;
+		};
+		
+		var removeFullLines = function() {
+			for( var i=0; i < LinesToRemove.length; i++ ) {
+				for( var x = 0; x < W; x++ ) {
+					Map[x][LinesToRemove[i]] = 0;
+				}
+				// walk through our array
+				for( var y = LinesToRemove[i]; 0 < y; y-- ) {
+					for( var x = 0; x < W; x++ ) {
+						Map[x][y] = Map[x][y-1];
+					}
+				}
+			}
+			LinesToRemove = [];
+		};
+		
+		var drawScene = function() {
+			clearCanvas();
+			setCanvasBackground('grey');
+			context.fillStyle = 'blue';
+			context.strokeStyle = 'black';
+			context.save();
+			
+			switch( MovingColor ) {
+				case 0: break; // skip
+				case 1: context.fillStyle = 'red'; break; // draw Red block
+				case 2: context.fillStyle = 'green'; break; // draw Green block
+				case 3: context.fillStyle = 'blue'; break; // draw Blue block
+				case 4: context.fillStyle = 'yellow'; break; // draw Yellow block
+			}
+			
+			var tmp = [[0,0],[0,0],[0,0],[0,0]];
+			for( var i = 0; i < 4; i++ ) {
+				tmp[i][0] = MovingShape[i][0] + MovingPos[0];
+				tmp[i][1] = MovingShape[i][1] + MovingPos[1];
+			}
+			for( var i = 0; i < 4; i++ ) {
+				context.fillRect(tmp[i][0]*SquareSize, tmp[i][1]*SquareSize, SquareSize, SquareSize);
+			}
+			
+			// walk through our array
+			for( var y = 0; y < H; y++ ) {
+				for( var x = 0; x < W; x++ ) {
+					switch( Map[x][y] ) {
+						case 0: // skip
+							break;
+						case 1: // draw Red block
+							context.fillStyle = 'red';
+							context.fillRect(x*SquareSize, y*SquareSize, SquareSize, SquareSize);
+							//context.drawImage(imgBrick, 0, 0, iCellSize, iCellSize, x*iCellSize, y*iCellSize, iCellSize, iCellSize);
+							break;
+						case 2: // draw Green block
+							context.fillStyle = 'green';
+							context.fillRect(x*SquareSize, y*SquareSize, SquareSize, SquareSize);
+							break;
+						case 3: // draw Blue block
+							context.fillStyle = 'blue';
+							context.fillRect(x*SquareSize, y*SquareSize, SquareSize, SquareSize);
+							break;
+						case 4: // draw Yellow block
+							context.fillStyle = 'yellow';
+							context.fillRect(x*SquareSize, y*SquareSize, SquareSize, SquareSize);
+							break;
+					}
+				}
+			}
+			
+			context.restore();
+		};
+		
+		var drawNextPiece = function() {
+			npContext.clearRect(0, 0, npCanvas.width, npCanvas.height);
+			npContext.fillStyle = 'white';
+			npContext.fillRect(0, 0, npCanvas.width, npCanvas.height);
+			npContext.fillStyle = 'blue';
+			npContext.strokeStyle = 'black';
+			npContext.save();
+			
+			switch( NextColor ) {
+				case 0: break; // skip
+				case 1: npContext.fillStyle = 'red'; break; // draw Red block
+				case 2: npContext.fillStyle = 'green'; break; // draw Green block
+				case 3: npContext.fillStyle = 'blue'; break; // draw Blue block
+				case 4: npContext.fillStyle = 'yellow'; break; // draw Yellow block
+			}
+			
+			var tmp = [[0,0],[0,0],[0,0],[0,0]];
+			for( var i = 0; i < 4; i++ ) {
+				tmp[i][0] = NextShape[i][0] + 2;
+				tmp[i][1] = NextShape[i][1] + 2;
+			}
+			for( var i = 0; i < 4; i++ ) {
+				npContext.fillRect(tmp[i][0]*SquareSize, tmp[i][1]*SquareSize, SquareSize, SquareSize);
+			}
+			
+			context.restore();
+		};
+		
+		var updateInfoView = function() {
+			var infoView = document.getElementById('info');
+			
+			LinesRemoved += LinesToRemove.length;
+			switch( LinesToRemove.length ) {
+				case 0: break; // skip
+				case 1: Score += 40; break;
+				case 2: Score += 100; break;
+				case 3: Score += 300; break;
+				case 4: Score += 600; break;
+			}
+			Level = Math.floor(Score/1000) +1;
+			
+			infoView.innerHTML = "<p>Level: " + Level + 
+								 "</p><p>Lines: " + LinesRemoved + 
+								 "</p><p>Score: " + Score + "</p>";
+			updateCounterMax = 20-Level+1;
+		};
+		
+		
+		var handleCycle = function() {
+			if( isPaused || GameOver ) {
+				drawScene();
+				if( GameOver )
+				{
+					context.fillStyle = "black";
+					context.font = "24pt Helvetica";
+					context.fillText("Game Over!", 50, 150);
+				}
+			} else {
+				if( updateCounter <= 0 ) {
+					if( !moveShapeDown() ) {
+						for( var i = 0; i < 4; i++ ) {
+							var x = MovingShape[i][0] + MovingPos[0];
+							var y = MovingShape[i][1] + MovingPos[1];
+							Map[x][y] = MovingColor;
+						}
+						
+						for( var i = 0; i < 4; i++ ) {
+							MovingShape[i][0] = NextShape[i][0];
+							MovingShape[i][1] = NextShape[i][1];
+						}
+						MovingColor = NextColor;
+						MovingPos = [4,0];
+						
+						// Check for the end of game
+						var tmp = [[0,0],[0,0],[0,0],[0,0]];
+						for( var i = 0; i < 4; i++ ) {
+							tmp[i][0] = MovingShape[i][0] + MovingPos[0];
+							tmp[i][1] = MovingShape[i][1] + MovingPos[1];
+						}
+						for( var i = 0; i < 4; i++ )
+						{
+							if( Map[tmp[i][0]][tmp[i][1]] != 0 ) { GameOver = true; break; }
+						}
+						
+						if( !GameOver ) {
+							var np = getNextPiece();
+							for( var i = 0; i < 4; i++ ) {
+								NextShape[i][0] = Shapes[np][i][0];
+								NextShape[i][1] = Shapes[np][i][1];
+							}
+							NextColor = getNextColor();
+							drawNextPiece();
+							if( checkLineRemovalCondition() ) {
+								removingLines = true;
+							}
+						}
+					}
+					updateCounter = updateCounterMax;
+				}
+				// Animate the line removal, highlighting
+				if( removingLines ) {
+					updateInfoView();
+					removeFullLines();
+					removingLines = false;
+				}
+				drawScene();
+				updateCounter -= 1;
+			}
+		};
+	</script>
+</head>
+<body>
+	<div class="container">
+		<canvas id="scene" width="200" height="400" tabindex="1"></canvas>
+		<canvas id="nextPieceScene" width="150" height="100" tabindex="1"></canvas>
+		<div id="info"><p>Level: 1</p><p>Lines: 0</p><p>Score: 0</p></div>
+		<div id="moreinfo"><p>Rotate: Up arrow<br>
+						   Left: Left arrow<br>
+						   Right: Right arrow<br>
+						   Drop: Down arrow<br>
+						   Pause: Spacebar<br>
+						   New Game: Enter</p></div>
+	</div>
+	<script>
+		init();
+		drawScene();
+		handleCycle();
+	</script>
+</body>
+</html>

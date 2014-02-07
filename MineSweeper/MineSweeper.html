@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en" >
+<head>
+	<meta charset="utf-8" />
+	<meta name="author" content="Script Tutorials" />
+	<title>HTML5 Game MineSweeper</title>
+
+	<style>
+	canvas {
+		border: 2px inset black;
+	}
+	
+	#minesLeftCounter {
+		border: 2px inset black;
+		position: relative;
+		width: 150px;
+	}
+	
+	#timeCounter {
+		border: 2px inset black;
+		position: relative;
+		width: 150px;
+	}
+	
+	#info {
+		border: 2px inset black;
+		position: relative;
+		width: 150px;
+	}
+	
+	.container {
+		background-color: #f2f2f2;
+	}
+	</style>
+
+	<script type="text/javascript" src="jquery-1.9.0.js"></script>
+	<script>
+		var canvas = null;
+		var context = null;
+		var Map;
+		var FlagMap;
+		var W = 9;
+		var H = 9;
+		var SquareSize = 20;
+		var LevelData = [[9,9,10],[16,16,40],[30,16,99]]; // width, height, mines
+		var TimerStarted = false;
+		var TheEndState = 0; // 1,0,-1
+		
+		var SelectedLevel = 0;
+		var MinesLeft = 10;
+		var TimeUsed = 0;
+		var TimerIntervalId = 0;
+		
+		var GameState = 0; // Menu(0), Game(1)
+		var ImgMine, ImgHitMine, ImgFlaggedMine, ImgHidden, ImgFlaggedHidden = null;
+		
+		function create2DArray(width, height) {
+			var arr = new Array(width);
+			for(var k=0; k < width; ++k)
+			{
+				arr[k] = new Array(height);
+			}
+
+			return arr;
+		};
+		
+		var clearCanvas = function() {
+			context.clearRect(0, 0, canvas.width, canvas.height);
+		};
+		
+		// Color, Gradient or Pattern
+		var setCanvasBackground = function(CGP) {
+			context.fillStyle = CGP;
+			context.fillRect(0, 0, canvas.width, canvas.height);
+		};
+		
+		var checkEndConditions = function() {
+			// All squares, that have no mine, have to be flagged or visible.
+			var ret = 1;
+			for( var y = 0; y < H; y++ )
+			{
+				for( var x = 0; x < W; x++ )
+				{
+					if( (FlagMap[x][y] == false) && (10 <= Map[x][y]) ) { ret = 0; } // Not there yet
+					if( Map[x][y] == 9 ) { return -1; } // Hit a mine
+				}
+			}
+			return ret;
+		};
+		
+		var initMines = function(minesNeeded) {
+			while(0 < minesNeeded)
+			{
+				var indX = Math.floor(Math.random()*W);
+				var indY = Math.floor(Math.random()*H);
+				if( Map[indX][indY] == 10 ) {
+					Map[indX][indY] = 19;
+					minesNeeded -= 1;
+				}
+			}
+			
+			var tmpMap = create2DArray(W+2, H+2);
+			for( var y = 0; y < H+2; y++ ) // Init the larger temporary array to contain the Map in the middle.
+			{
+				for( var x = 0; x < W+2; x++ )
+				{
+					if(x == 0 || y == 0) { tmpMap[x][y] = 10; }
+					else if(x == W+1 || y == H+1) { tmpMap[x][y] = 10; } // H+1 = curHeight(H+2)-1
+					else { tmpMap[x][y] = Map[x-1][y-1]; }
+				}
+			}
+			for( var y = 1; y <= H; y++ ) // Count the closenessess of the mines
+			{
+				for( var x = 1; x <= W; x++ ) // W+1 = curWidth(W+2)-1 = (<=)
+				{
+					if(tmpMap[x][y] == 19) { continue; } // Don't mess with the mines
+					var mineCounter = 0;
+					for( var i = -1; i <= 1; i++ ) // Count the closenessess of the mines
+					{
+						for( var j = -1; j <= 1; j++ )
+						{
+							if(i == 0 && j == 0) { continue; }
+							if(tmpMap[x+i][y+j] == 19) { mineCounter += 1; }
+						}
+					}
+					tmpMap[x][y] += mineCounter;
+				}
+			}
+			for( var y = 1; y < H+1; y++ ) // Copy the closeness values back to the Map
+			{
+				for( var x = 1; x < W+1; x++ )
+				{
+					Map[x-1][y-1] = tmpMap[x][y];
+				}
+			}
+		};
+		
+		var handleEnding = function() {
+			clearInterval(TimerIntervalId);
+			TimerStarted = false;
+		};
+		
+		var toggleFlag = function(winX,winY) {
+			var dx = winX;
+			var dy = winY;
+			var indX = Math.floor(dx/20);
+			var indY = Math.floor(dy/20);
+			if( Map[indX][indY] < 10 ) { return; } // This square is visible
+			if( FlagMap[indX][indY] == true ) {
+				FlagMap[indX][indY] = false;
+				MinesLeft -= 1;
+			} else {
+				FlagMap[indX][indY] = true;
+				MinesLeft += 1;
+			}
+		};
+		
+		var revealClickedArea = function(winX,winY) {
+			var dx = winX;
+			var dy = winY;
+			var indX = Math.floor(dx/20);
+			var indY = Math.floor(dy/20);
+			if( (Map[indX][indY] < 10) || (FlagMap[indX][indY] == true) ) { return; } // This square is visible or flagged
+			floodFill(indX,indY);
+		};
+		
+		var floodFill = function(x,y) {
+			if(x < 0 || y < 0 || W <= x || H <= y) { return; } // Grid borders
+			if((Map[x][y] < 10) || (FlagMap[x][y] == true)) { return; } // This square is visible or flagged
+			Map[x][y] -= 10;
+			if( Map[x][y] == 9 ) { return; }
+			if(0 < Map[x][y]) { return; } // Was the cell completely clear? Don't go over numbered cells
+			floodFill(x+1,y);
+			floodFill(x-1,y);
+			floodFill(x,y+1);
+			floodFill(x,y-1);
+		};
+		
+		// Process Pressed Keys function
+		var processPressedKeys = function(key) {
+			switch(key) {
+				case 13: if( GameState != 1 ) { return; } GameState = 0; drawMenuScreen(); break; // 'Enter' key
+				case 49: if( GameState != 0 ) { return; } SelectedLevel = 0; initNewGame(); break; // 1
+				case 50: if( GameState != 0 ) { return; } SelectedLevel = 1; initNewGame(); break; // 2
+				case 51: if( GameState != 0 ) { return; } SelectedLevel = 2; initNewGame(); break; // 3
+			}
+			if(GameState == 1) { drawScene(); }
+		};
+		
+		// Process mouse click function
+		var processMouseClick = function(e) {
+			if( GameState != 1 ) { return; } // The game is not initialized for playing yet.
+			switch(e.which) {
+				case 1: // LMB
+					var tx = e.pageX - this.offsetLeft;
+					var ty = e.pageY - this.offsetTop;
+					if(isNaN(tx) || isNaN(ty)) {
+						tx = e.pageX - e.target.offsetLeft;
+						ty = e.pageY - e.target.offsetTop;
+					}
+					revealClickedArea(tx, ty);
+					break;
+				case 2: // MMB
+					break;
+				case 3: // RMB
+					var tx = e.pageX - this.offsetLeft;
+					var ty = e.pageY - this.offsetTop;
+					if(isNaN(tx) || isNaN(ty)) {
+						tx = e.pageX - e.target.offsetLeft;
+						ty = e.pageY - e.target.offsetTop;
+					}
+					toggleFlag(tx, ty);
+					break;
+				default: // Weird mouse
+			}
+			if( TimerStarted == false ) { TimerStarted = true; TimerIntervalId = setInterval(updateTimeView, 1000); }
+			TheEndState = checkEndConditions();
+			if(GameState == 1) { drawScene(); }
+			if(TheEndState != 0) { handleEnding(); }
+		};
+		
+		var initNewGame = function() {
+			GameState = 1;
+			MinesLeft = LevelData[SelectedLevel][2];
+			TimeUsed = 0;
+			TheEndState = 0;
+			W = LevelData[SelectedLevel][0];
+			H = LevelData[SelectedLevel][1];
+			canvas.width  = 20*W;
+			canvas.height = 20*H; 
+			
+			Map = create2DArray(W, H);
+			FlagMap = create2DArray(W, H);
+			for( var y = 0; y < H; y++ )
+			{
+				for( var x = 0; x < W; x++ )
+				{
+					Map[x][y] = 10; // Hidden square
+					FlagMap[x][y] = false; // Unflagged square
+				}
+			}
+			initMines(MinesLeft);
+			drawScene();
+		};
+		
+		var init = function() {
+			ImgMine = new Image();
+			ImgMine.src = 'mine.png';
+			ImgHitMine = new Image();
+			ImgHitMine.src = 'mineHit.png';
+			ImgFlaggedMine = new Image();
+			ImgFlaggedMine.src = 'mineFlagged.png';
+			ImgHidden = new Image();
+			ImgHidden.src = 'hidden.png';
+			ImgFlaggedHidden = new Image();
+			ImgFlaggedHidden.src = 'hiddenFlagged.png';
+			
+			canvas = document.getElementById('scene');
+			context = canvas.getContext('2d');
+			
+			SelectedLevel = 0;
+			drawMenuScreen();
+			
+			$(window).keydown(function(event){ // keyboard-down alerts
+				processPressedKeys(event.keyCode);
+			});
+			$("#scene").click(processMouseClick);
+			$("#scene").bind("contextmenu",function(e) { processMouseClick(e); return false; }); 
+		};
+		
+		
+		
+		var drawMenuScreen = function() {
+			canvas.width  = 400;
+			canvas.height = 400; 
+			clearCanvas();
+			setCanvasBackground('white');
+			context.fillStyle = 'black';
+			context.strokeStyle = 'black';
+			
+			context.font="30px Arial";
+			context.fillText("MineSweeper",10,30);
+			context.font="25px Arial";
+			context.fillText("Select Level To Start New Game",10,60);
+			context.font="20px Arial";
+			context.fillText("1 for Level 9x9 grid with 10 mines",10,80);
+			context.fillText("2 for Level 16x16 grid with 40 mines",10,100);
+			context.fillText("3 for Level 30x16 grid with 99 mines",10,120);
+		};
+		
+		var drawScene = function() {
+			clearCanvas();
+			setCanvasBackground('white');
+			context.fillStyle = 'blue';
+			context.strokeStyle = 'black';
+			context.save();
+			
+			// walk through the array
+			for( var y = 0; y < H; y++ ) {
+				for( var x = 0; x < W; x++ ) {
+					if(0 == Map[x][y]) { 
+						context.fillStyle = 'grey';
+						context.fillRect(x*SquareSize, y*SquareSize, SquareSize, SquareSize);
+					} else if(1 <= Map[x][y] && Map[x][y] <= 8) { 
+						context.fillStyle = 'grey';
+						context.fillRect(x*SquareSize, y*SquareSize, SquareSize, SquareSize);
+						context.fillStyle = 'blue';
+						context.strokeStyle = 'black';
+						context.font="18px Arial";
+						context.fillText(Map[x][y],x*SquareSize+5, y*SquareSize+18);
+					} else if(9 == Map[x][y]) { 
+						context.drawImage(ImgHitMine, 0, 0, SquareSize, SquareSize, x*SquareSize, y*SquareSize, SquareSize, SquareSize);
+					} else if(10 <= Map[x][y] && FlagMap[x][y] == false) {
+						if(TheEndState != 0 && 19 == Map[x][y]) {
+							context.drawImage(ImgMine, 0, 0, SquareSize, SquareSize, x*SquareSize, y*SquareSize, SquareSize, SquareSize); 
+						} else {
+							context.drawImage(ImgHidden, 0, 0, SquareSize, SquareSize, x*SquareSize, y*SquareSize, SquareSize, SquareSize); 
+						}
+					} else if(10 <= Map[x][y] && FlagMap[x][y] == true) {
+						if(TheEndState != 0 && 19 == Map[x][y]) {
+							context.drawImage(ImgFlaggedMine, 0, 0, SquareSize, SquareSize, x*SquareSize, y*SquareSize, SquareSize, SquareSize); 
+						} else {
+							context.drawImage(ImgFlaggedHidden, 0, 0, SquareSize, SquareSize, x*SquareSize, y*SquareSize, SquareSize, SquareSize); 
+						}
+					}
+				}
+			}
+			
+			if(TheEndState == -1) {
+				context.fillStyle = 'red';
+				context.strokeStyle = 'red';
+				context.font="40px Arial";
+				context.fillText("Try again",0, 40);
+			} else if(TheEndState == 1) {
+				context.fillStyle = 'red';
+				context.strokeStyle = 'red';
+				context.font="40px Arial";
+				context.fillText("You won",0, 40);
+			}
+			
+			context.restore();
+		};
+		
+		var updateTimeView = function() {
+			var timer = document.getElementById('timeCounter');
+			
+			TimeUsed += 1;
+			timer.innerHTML = "<p>" + TimeUsed + "</p>";
+		};
+		
+		var updateMinesLeftView = function() {
+			var minesLeft = document.getElementById('minesLeftCounter');
+			
+			minesLeft.innerHTML = "<p>" + MinesLeft + "</p>";
+		};
+	</script>
+</head>
+<body>
+	<div class="container">
+		<div id="timeCounter"><p>0</p></div>
+		<div id="minesLeftCounter"><p>-</p></div>
+		<div id="info"><p>New Game: Enter</p></div>
+		<canvas id="scene" width="200" height="400" tabindex="1"></canvas>
+	</div>
+	<script>
+		init();
+	</script>
+</body>
+</html>
