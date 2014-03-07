@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Basic Calculator</title>
+<script language="javascript" type="text/javascript" src="jquery-1.9.0.js"></script>
+<link rel="stylesheet" type="text/css" href="basic_calc.css">
+
+<style>
+button.css3button {
+	cursor:pointer;cursor:hand;
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 14px;
+	color: #ffffff;
+	padding: 0px 12px;
+	background: -moz-linear-gradient(
+		top,
+		#00f2f2 0%,
+		#00f2f2 25%,
+		#009494);
+	background: -webkit-gradient(
+		linear, left top, left bottom, 
+		from(#00f2f2),
+		color-stop(0.25, #00f2f2),
+		to(#009494));
+	-moz-border-radius: 30px;
+	-webkit-border-radius: 30px;
+	border-radius: 30px;
+	border: 3px solid #ffffff;
+	-moz-box-shadow:
+		0px 3px 11px rgba(000,000,000,0.5),
+		inset 0px 0px 1px rgba(0,61,61,1);
+	-webkit-box-shadow:
+		0px 3px 11px rgba(000,000,000,0.5),
+		inset 0px 0px 1px rgba(0,61,61,1);
+	box-shadow:
+		0px 3px 11px rgba(000,000,000,0.5),
+		inset 0px 0px 1px rgba(0,61,61,1);
+	text-shadow:
+		0px -1px 0px rgba(000,000,000,0.2),
+		0px 1px 0px rgba(255,255,255,0.3);
+}
+
+.css3button:active { border: 3px solid #ff0000; }
+
+.css3activebutton {
+	cursor:pointer;cursor:hand;
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 14px;
+	color: #ffffff;
+	padding: 0px 12px;
+	background: -moz-linear-gradient(
+		top,
+		#00f2f2 0%,
+		#00f2f2 25%,
+		#009494);
+	background: -webkit-gradient(
+		linear, left top, left bottom, 
+		from(#00f2f2),
+		color-stop(0.25, #00f2f2),
+		to(#009494));
+	-moz-border-radius: 30px;
+	-webkit-border-radius: 30px;
+	border-radius: 30px;
+	border: 3px solid #ff0000;
+	-moz-box-shadow:
+		0px 3px 11px rgba(000,000,000,0.5),
+		inset 0px 0px 1px rgba(0,61,61,1);
+	-webkit-box-shadow:
+		0px 3px 11px rgba(000,000,000,0.5),
+		inset 0px 0px 1px rgba(0,61,61,1);
+	box-shadow:
+		0px 3px 11px rgba(000,000,000,0.5),
+		inset 0px 0px 1px rgba(0,61,61,1);
+	text-shadow:
+		0px -1px 0px rgba(000,000,000,0.2),
+		0px 1px 0px rgba(255,255,255,0.3);
+}
+
+div.basicCalc {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 14px;
+	color: #ffffff;
+	padding: 10px 20px;
+	background: -moz-linear-gradient(
+		top,
+		#c2c2c2 0%,
+		#c2c2c2 25%,
+		#545454);
+	background: -webkit-gradient(
+		linear, left top, left bottom, 
+		from(#c2c2c2),
+		color-stop(0.25, #c2c2c2),
+		to(#545454));
+	-moz-border-radius: 30px;
+	-webkit-border-radius: 30px;
+	border-radius: 30px;
+	border: 3px solid #ffffff;
+	-moz-box-shadow:
+		0px 3px 11px rgba(000,000,000,0.5),
+		inset 0px 0px 1px rgba(60,61,61,1);
+	-webkit-box-shadow:
+		0px 3px 11px rgba(000,000,000,0.5),
+		inset 0px 0px 1px rgba(60,61,61,1);
+	box-shadow:
+		0px 3px 11px rgba(000,000,000,0.5),
+		inset 0px 0px 1px rgba(60,61,61,1);
+	text-shadow:
+		0px -1px 0px rgba(000,000,000,0.2),
+		0px 1px 0px rgba(255,255,255,0.3);
+}
+
+input.basicCalcView {
+	position: relative;
+	top:10px;
+	left:2px;
+	width:190px;
+	height:20px;
+	text-align:right
+}
+
+table.basicCalcKeys1 {
+	position: relative;
+	top:20px;
+	width:215px;
+}
+
+table.basicCalcKeys2 {
+	position: relative;
+	top:20px;
+	width:200px;
+}
+
+</style>
+
+
+<script>
+	var firstNumber = 0;
+	var dotPending = false;
+	var operatorPending = 0; // noop(0), divide(1), multiply(2), plus(3), minus(4)
+	var viewClearPending = false;
+	
+	function handleKeyDown(e) {
+		switch(e.which) {
+			//case 8:  $("Backspace").removeClass("css3button"); $("Backspace").addClass("css3activebutton"); removeLastDigit(); break; 	    // Backspace
+			case 8:  $("Backspace").css("border-color", "#ff0000"); removeLastDigit(); break; 	    // Backspace
+			case 13: executeOperation(); break;     // numpad Enter and the other one
+			case 42: setPendingOperator(2); break;  // '*'
+			case 43: setPendingOperator(3); break;  // '+'
+			case 44: addDot(); break;			    // ',' -> '.'
+			case 45: setPendingOperator(4); break;  // '-'
+			case 46: addDot(); break;			    // '.'
+			case 47: setPendingOperator(1); break;  // '/'
+			case 48: addNumber(e.which-48); break;  // '0'
+			case 49: $("one").css("border-color", "#ff0000"); 
+						addNumber(e.which-48); break;  // '1'
+			case 50: addNumber(e.which-48); break;  // '2'
+			case 51: addNumber(e.which-48); break;  // '3'
+			case 52: addNumber(e.which-48); break;  // '4'
+			case 53: addNumber(e.which-48); break;  // '5'
+			case 54: addNumber(e.which-48); break;  // '6'
+			case 55: addNumber(e.which-48); break;  // '7'
+			case 56: addNumber(e.which-48); break;  // '8'
+			case 57: addNumber(e.which-48); break;  // '9'
+			case 67: clearView(); break;     		// Clear view
+			case 79: complementOperator(); break;   // complement of current value, 1/x
+			case 80: percentOperator(); break;   	// Percent (value*100)
+			case 81: sqrtOperator(); break;		   	// Sqrt operation
+			case 83: signChangeOperator(); break;   // Change sign +/-
+			case 96: addNumber(e.which-96); break;  // numpad '0'
+			case 97: addNumber(e.which-96); break;  // numpad '1'
+			case 98: addNumber(e.which-96); break;  // numpad '2'
+			case 99: addNumber(e.which-96); break;  // numpad '3'
+			case 100: addNumber(e.which-96); break; // numpad '4'
+			case 101: addNumber(e.which-96); break; // numpad '5'
+			case 102: addNumber(e.which-96); break; // numpad '6'
+			case 103: addNumber(e.which-96); break; // numpad '7'
+			case 104: addNumber(e.which-96); break; // numpad '8'
+			case 105: addNumber(e.which-96); break; // numpad '9'
+			case 106: setPendingOperator(2); break; // numpad '*'
+			case 107: setPendingOperator(3); break; // numpad '+'
+			case 109: setPendingOperator(4); break; // numpad '-'
+			case 110: addDot(); break;			    // numpad',' -> '.'
+			case 111: setPendingOperator(1); break; // numpad '/'
+			case 171: setPendingOperator(3); break; // '+'
+			case 173: setPendingOperator(4); break; // '-'
+			case 188: addDot(); break;			    // ',' -> '.'
+			case 190: addDot(); break;			    // '.'
+			default: break;
+		}
+		e.preventDefault();
+	};
+	
+	function handleKeyUp(e) {
+	};
+	
+	$(window).keydown(handleKeyDown);
+	$(window).keyup(handleKeyUp);
+	
+	function getNumber() {
+		var view = document.getElementById('numView');
+		var tmpStr = view.value;
+		var tmpValue = 0;
+		var n = tmpStr.indexOf(".");
+		if(n == -1) {
+			tmpValue = parseInt(tmpStr);
+		} else {
+			tmpValue = parseFloat(tmpStr);
+		}
+		if((tmpStr.length == 0) || (tmpStr == "NaN") || (tmpStr == "Infinity")) {
+			tmpValue = 0;
+			view.value = "";
+		}
+		dotPending = false;
+		return tmpValue;
+	};
+	
+	function clearView() {
+		var view = document.getElementById('numView');
+		firstNumber = 0;
+		operatorPending = 0;
+		view.value = "";
+	};
+	
+	function addNumber(numStr) {
+		var view = document.getElementById('numView');
+		if(viewClearPending) {
+			view.value = "";
+			viewClearPending = false;
+		}
+		var tmpStr = view.value;
+		if((tmpStr.length == 0) || (tmpStr == "NaN") || (tmpStr == "Infinity")) {
+			view.value = "";
+			tmpStr = "";
+		}
+		if(tmpStr == "0" && !dotPending) { tmpStr = ""; view.value = ""; }
+		var n = tmpStr.indexOf(".");
+		if(n == -1) {
+			if( dotPending == true ) {
+				tmpStr = view.value.concat(".");
+			}
+			view.value = tmpStr.concat(numStr);
+		} else {
+			view.value = tmpStr.concat(numStr);
+		}
+		dotPending = false;
+	};
+	
+	function addDot() {
+		var view = document.getElementById('numView');
+		var tmpStr = view.value;
+		var n = tmpStr.indexOf(".");
+		if(n == -1) {
+			dotPending = true;
+		}
+	};
+	
+	function removeLastDigit() {
+		var view = document.getElementById('numView');
+		var tmpStr = view.value;
+		dotPending = false;
+		if(tmpStr.length == 0) { return; }
+		
+		var n = tmpStr.indexOf(".");
+		if(n == -1) {
+			view.value = tmpStr.substr(0, tmpStr.length-1);
+		} else {
+			if((n == tmpStr.length-1) || (n == tmpStr.length-2)) {
+				view.value = tmpStr.substr(0, tmpStr.length-2);
+			} else {
+				view.value = tmpStr.substr(0, tmpStr.length-1);
+			}
+		}
+	};
+	
+	function complementOperator() {
+		var view = document.getElementById('numView');
+		var tmpValue = getNumber();
+		//operatorPending = 0;
+		if(tmpValue != 0) {
+			view.value = 1/tmpValue;
+		}
+		viewClearPending = false;
+	};
+	
+	function signChangeOperator() {
+		var view = document.getElementById('numView');
+		var tmpValue = getNumber();
+		if(tmpValue != 0) {
+			view.value = -1*tmpValue;
+		}
+
+		viewClearPending = false;
+	};
+	
+	function percentOperator() {
+		var view = document.getElementById('numView');
+		var tmpValue = getNumber();
+		if(tmpValue >= 0) {
+			view.value = 100*tmpValue;
+		}
+
+		viewClearPending = false;
+	};
+	
+	function sqrtOperator() {
+		var view = document.getElementById('numView');
+		var tmpValue = getNumber();
+		if(tmpValue != 0) {
+			view.value = Math.sqrt(tmpValue);
+		}
+
+		viewClearPending = false;
+	};
+	
+	function setPendingOperator(opId) {
+		if((0 < operatorPending) && (viewClearPending == false)) {
+			// Chaining operations
+			executeOperation();
+		}
+		var tmpValue = getNumber();
+		firstNumber = tmpValue;
+		operatorPending = opId;
+		viewClearPending = true;
+	};
+	
+	function executeOperation() {
+		var view = document.getElementById('numView');
+		var tmpValue = getNumber();
+		switch(operatorPending) {
+		case 0: // noop
+			break;
+		case 1: // divide
+			view.value = firstNumber/tmpValue;
+			break;
+		case 2: // multiply
+			view.value = firstNumber*tmpValue;
+			break;
+		case 3: // plus
+			view.value = firstNumber+tmpValue;
+			break;
+		case 4: // minus
+			view.value = firstNumber-tmpValue;
+			break;
+		default:
+			break;
+		}
+		operatorPending = 0;
+		viewClearPending = true;
+	};
+</script>
+</head>
+
+<body>
+	<!-- <button type="button" name="" value="" class="css3button">submit</button> -->
+	<div id="BasicCalculator" class="basicCalc" style="width:200px; height:230px">
+		<input type="text" id="numView" class="basicCalcView" placeholder="0" readonly>
+		<table class="basicCalcKeys1" border="0">
+		<tr>
+			<td><button type="button" name="Backspace" id="Backspace" value="" onclick="removeLastDigit();" class="css3button">Backspace</button></td>
+			<td><button type="button" name="C" id="C" value="" onclick="clearView();" class="css3button">C</button></td>
+		</tr>
+		</table> 
+		<table class="basicCalcKeys2" border="0">
+		<tr>
+			<td><button type="button" name="seven" id="seven" value="" onclick="addNumber('7');" class="css3button">7</button></td>
+			<td><button type="button" name="eight" id="eight" value="" onclick="addNumber('8');" class="css3button">8</button></td>
+			<td><button type="button" name="nine" id="nine" value="" onclick="addNumber('9');" class="css3button">9</button></td>
+			<td><button type="button" name="divide" id="divide" value="" onclick="setPendingOperator(1);" class="css3button">/</button></td>
+		</tr>
+		<tr>
+			<td><button type="button" name="four" id="four" value="" onclick="addNumber('4');" class="css3button">4</button></td>
+			<td><button type="button" name="five" id="five" value="" onclick="addNumber('5');" class="css3button">5</button></td>
+			<td><button type="button" name="six" id="six" value="" onclick="addNumber('6');" class="css3button">6</button></td>
+			<td><button type="button" name="divide" id="multiply" value="" onclick="setPendingOperator(2);" class="css3button">*</button></td>
+		</tr>
+		<tr>
+			<td><button type="button" name="one" id="one" value="" onclick="addNumber('1');" class="css3button">1</button></td>
+			<td><button type="button" name="two" id="two" value="" onclick="addNumber('2');" class="css3button">2</button></td>
+			<td><button type="button" name="three" id="three" value="" onclick="addNumber('3');" class="css3button">3</button></td>
+			<td><button type="button" name="minus" id="minus" value="" onclick="setPendingOperator(4);" class="css3button">-</button></td>
+		</tr>
+		<tr>
+			<td><button type="button" name="zero" id="zero" value="" onclick="addNumber('0');" class="css3button">0</button></td>
+			<td><button type="button" name="signChange" id="signChange" value="" onclick="signChangeOperator();" class="css3button">&plusmn;</button></td>
+			<td><button type="button" name="dot" id="dot" value="" onclick="addDot();" class="css3button" style="padding:0px 14px;">.</button></td>
+			<td><button type="button" name="plus" id="plus" value="" onclick="setPendingOperator(3);" class="css3button" style="padding:0px 10px;">+</button></td>
+		</tr>
+		<tr>
+			<td><button type="button" name="sqrt" id="sqrt" value="" onclick="sqrtOperator();" class="css3button" style="padding:0px 4px;">sqrt</button></td>
+			<td><button type="button" name="percent" id="percent" value="" onclick="percentOperator();" class="css3button" style="padding:0px 10px;">%</button></td>
+			<td><button type="button" name="complement" id="complement" value="" onclick="complementOperator();" class="css3button" style="padding:0px 7px;">1/x</button></td>
+			<td><button type="button" name="equals" id="equals" value="" onclick="executeOperation();" class="css3button" style="padding:0px 10px;">=</button></td>
+		</tr>
+		</table> 
+	</div>
+</body>
+</html>
