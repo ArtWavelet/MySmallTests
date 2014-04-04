@@ -1,0 +1,51 @@
+The DAtabase side of this project.
+
+CREATE DATABASE EMP;
+
+use mysql;
+GRANT SELECT, INSERT, UPDATE, DELETE ON EMP.* TO 'username'@'109.204.128.14' IDENTIFIED BY 'password';
+GRANT SELECT, INSERT, UPDATE, DELETE ON EMP.* TO 'username'@'localhost' IDENTIFIED BY 'password';
+
+use EMP;
+CREATE TABLE Person (
+	id			INT UNSIGNED NOT NULL AUTO_INCREMENT,
+	firstname		VARCHAR(20) NOT NULL,
+	lastname		VARCHAR(30) NOT NULL,
+	birthday		DATE,
+	gender			ENUM('M', 'F'),
+	additional_info	TEXT,
+	PRIMARY KEY (id),
+);
+
+CREATE TABLE Place (
+	id			INT UNSIGNED NOT NULL AUTO_INCREMENT,
+	Person_id		int unsigned not null,
+	name			VARCHAR(20),
+	address			VARCHAR(100),
+	description		TEXT,
+	zipcode			VARCHAR(7),
+	city			VARCHAR(50),
+	PRIMARY KEY (id),
+	foreign key (Person_id) references Person(id)
+);
+
+ALTER TABLE Place ADD country VARCHAR(20);
+
+CREATE TABLE Phone (
+	id			INT UNSIGNED NOT NULL AUTO_INCREMENT,
+	Person_id		int unsigned not null,
+	type			ENUM('GSM', 'home', 'work'),
+	nro				VARCHAR(19),
+	country			VARCHAR(20),
+	PRIMARY KEY (id),
+	foreign key (Person_id) references Person(id)
+);
+
+CREATE TABLE Email (
+	id			INT UNSIGNED NOT NULL AUTO_INCREMENT,
+	Person_id		int unsigned not null,
+	type			ENUM('personal', 'work', 'Other'),
+	email			VARCHAR(75),
+	PRIMARY KEY (id),
+	foreign key (Person_id) references Person(id)
+);
